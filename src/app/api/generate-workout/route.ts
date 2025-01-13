@@ -48,7 +48,7 @@ export async function POST(request: Request) {
 
     // Get user context
     const { data: preferences, error: preferencesError } = await supabaseAdmin
-      .from("user_fitness_preferences")
+      .from("user_preferences")
       .select("*")
       .eq("user_id", userId)
       .single();
@@ -74,12 +74,10 @@ export async function POST(request: Request) {
 Generate a concise workout routine based on:
 
 User Profile:
-- Goal: ${preferences?.primary_goal || "general fitness"}
+- Goal: ${preferences?.fitness_goal || "general fitness"}
 - Level: ${preferences?.experience_level || "beginner"}
-- Equipment: ${
-      preferences?.available_equipment?.join(", ") || "basic gym equipment"
-    }
-- Days/week: ${preferences?.preferred_workout_days || 3}
+- Equipment: ${preferences?.equipment?.join(", ") || "basic gym equipment"}
+- Days/week: ${preferences?.workout_days || 3}
 - Duration: ${preferences?.workout_duration_minutes || 60} min
 - Injuries: ${preferences?.injury_considerations?.join(", ") || "none"}
 - Target: ${preferences?.target_muscle_groups?.join(", ") || "full body"}
@@ -173,6 +171,23 @@ Return a JSON workout plan with:
         })
       );
     });
+
+    // Track the generation in workout_generations table
+    const { error: generationError } = await supabaseAdmin
+      .from("workout_generations")
+      .insert({
+        user_id: userId,
+        workout_data: workout,
+        metadata: {
+          preferences,
+          recentStats,
+        },
+      });
+
+    if (generationError) {
+      console.error("Error tracking workout generation:", generationError);
+      throw new Error("Failed to track workout generation");
+    }
 
     return NextResponse.json(workout);
   } catch (error) {

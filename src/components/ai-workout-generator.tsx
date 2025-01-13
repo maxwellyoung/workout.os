@@ -31,7 +31,7 @@ export function AIWorkoutGenerator({
 }: AIWorkoutGeneratorProps) {
   const [isLoading, setIsLoading] = useState(false);
   const { user } = useAuth();
-  const { isPro, features } = useSubscription();
+  const { isPro, remainingGenerations } = useSubscription();
 
   const handleGenerate = async () => {
     if (!user) {
@@ -39,7 +39,7 @@ export function AIWorkoutGenerator({
       return;
     }
 
-    if (!isPro && features.aiWorkoutGenerations === 0) {
+    if (!isPro && remainingGenerations === 0) {
       toast.error(
         "You've reached your monthly limit. Upgrade to Pro for unlimited generations!"
       );
@@ -80,8 +80,15 @@ export function AIWorkoutGenerator({
   };
 
   return (
-    <Button onClick={handleGenerate} disabled={isLoading}>
-      {isLoading ? "Generating..." : "Generate Workout"}
-    </Button>
+    <div className="flex flex-col gap-1">
+      <Button onClick={handleGenerate} disabled={isLoading}>
+        {isLoading ? "Generating..." : "Generate Workout"}
+      </Button>
+      {!isPro && (
+        <p className="text-xs text-muted-foreground text-center">
+          {remainingGenerations} generations remaining
+        </p>
+      )}
+    </div>
   );
 }

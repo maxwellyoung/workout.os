@@ -46,7 +46,7 @@ export async function getUserWorkoutContext(userId: string) {
   try {
     const [preferencesResponse, statsResponse] = await Promise.all([
       supabase
-        .from("user_fitness_preferences")
+        .from("user_preferences")
         .select("*")
         .eq("user_id", userId)
         .single(),
@@ -83,10 +83,10 @@ export async function getUserWorkoutContext(userId: string) {
 export async function updateUserPreferences(
   userId: string,
   preferences: Partial<{
-    primary_goal: string;
+    fitness_goal: string;
     experience_level: string;
-    available_equipment: string[];
-    preferred_workout_days: number;
+    equipment: string[];
+    workout_days: number;
     workout_duration_minutes: number;
     injury_considerations: string[];
     target_muscle_groups: string[];
@@ -94,7 +94,7 @@ export async function updateUserPreferences(
 ) {
   try {
     const { error } = await supabase
-      .from("user_fitness_preferences")
+      .from("user_preferences")
       .upsert({
         user_id: userId,
         ...preferences,
