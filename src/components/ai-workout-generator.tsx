@@ -1,17 +1,13 @@
 "use client";
 
-import { useState } from "react";
-import { useAuth } from "@/components/auth/auth-provider";
+import { useState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { useAuth } from "./auth/auth-provider";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
+import { motion } from "framer-motion";
+import { Loader2 } from "lucide-react";
+import { getSubscriptionStatus } from "@/lib/subscription";
 
 interface Workout {
   [day: string]: Array<{
@@ -20,31 +16,14 @@ interface Workout {
     sets: number;
     reps: number;
     completed: boolean;
+    targetMuscles?: string[];
+    notes?: string;
   }>;
 }
 
 interface AIWorkoutGeneratorProps {
-  onWorkoutGenerated: (workouts: Workout) => void;
+  onWorkoutGenerated?: (workout: Workout) => void;
   saveAsRoutine?: boolean;
-}
-
-interface WorkoutAnalysis {
-  muscleGroupsCovered: Record<string, string>;
-  weeklyVolume: Record<string, string>;
-  restPeriods: string[];
-  notes: string[];
-}
-
-interface UserPreferences {
-  user_id: string;
-  fitness_goal: string;
-  experience_level: string;
-  workout_days: string[];
-}
-
-interface PreviewWorkout {
-  workout: Workout;
-  analysis?: WorkoutAnalysis;
 }
 
 export function AIWorkoutGenerator({
@@ -53,195 +32,128 @@ export function AIWorkoutGenerator({
 }: AIWorkoutGeneratorProps) {
   const { user } = useAuth();
   const [isGenerating, setIsGenerating] = useState(false);
-  const [previewWorkout, setPreviewWorkout] = useState<PreviewWorkout | null>(
-    null
-  );
-  const [preferences, setPreferences] = useState<UserPreferences | null>(null);
+  const [remainingGenerations, setRemainingGenerations] = useState<
+    number | null
+  >(null);
+  const [isPro, setIsPro] = useState(false);
 
-  async function handleGenerate() {
+  useEffect(() => {
+    async function checkSubscription() {
+      if (!user?.id) return;
+
+      // Get subscription status
+      const { isPro } = await getSubscriptionStatus(user.id);
+      setIsPro(isPro);
+
+      if (!isPro) {
+        // Count existing generations in the last 30 days
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+        const { count } = await supabase
+          .from("workout_routines")
+          .select("*", { count: "exact", head: true })
+          .eq("user_id", user.id)
+          .gte("created_at", thirtyDaysAgo.toISOString());
+
+        setRemainingGenerations(3 - (count || 0));
+      }
+    }
+
+    checkSubscription();
+  }, [user]);
+
+  async function generateWorkout() {
+    if (!user) {
+      toast.error("Please sign in to generate a workout");
+      return;
+    }
+
+    setIsGenerating(true);
+    toast.loading("Analyzing your preferences and history...");
+
     try {
-      if (!user?.id) {
-        throw new Error("Please sign in to generate a workout");
-      }
-
-      setIsGenerating(true);
-
-      // Fetch user preferences
-      const { data: prefs, error: preferencesError } = await supabase
-        .from("user_preferences")
-        .select("*")
-        .eq("user_id", user.id)
-        .single();
-
-      if (preferencesError) {
-        if (preferencesError.code === "PGRST116") {
-          throw new Error(
-            "Please complete onboarding first to set your preferences"
-          );
-        }
-        console.error("Error fetching preferences:", preferencesError);
-        throw new Error("Failed to fetch user preferences");
-      }
-
-      if (!prefs) {
-        throw new Error(
-          "No preferences found. Please complete onboarding first"
-        );
-      }
-
-      setPreferences(prefs);
-
-      // Fetch user equipment
-      const { data: equipment, error: equipmentError } = await supabase
-        .from("equipment")
-        .select("name, quantity")
-        .eq("user_id", user.id);
-
-      if (equipmentError) {
-        console.error("Error fetching equipment:", equipmentError);
-        throw new Error("Failed to fetch user equipment");
-      }
-
-      // Generate workout
       const response = await fetch("/api/generate-workout", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          preferences: {
-            ...prefs,
-            equipment: equipment || [],
-          },
-          includeAnalysis: true,
-        }),
+        body: JSON.stringify({ userId: user.id }),
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        console.error("Error response from API:", errorData);
-        throw new Error(errorData.error || "Failed to generate workout");
+        const data = await response.json();
+        if (data.code === "GENERATION_LIMIT_REACHED") {
+          toast.error(data.error, {
+            action: {
+              label: "Upgrade",
+              onClick: () => (window.location.href = "/settings/billing"),
+            },
+          });
+          return;
+        }
+        throw new Error("Failed to generate workout");
       }
 
       const workout = await response.json();
 
       if (saveAsRoutine) {
-        // Validate workout data
-        if (!workout.workout) {
-          throw new Error("Invalid workout data received from API");
-        }
+        toast.loading("Saving your new routine...");
+        const { error } = await supabase.from("workout_routines").insert({
+          user_id: user.id,
+          name: workout.name,
+          description: workout.description,
+          workouts: workout.workouts,
+          analysis: workout.analysis,
+        });
 
-        // Show preview instead of saving immediately
-        setPreviewWorkout(workout);
-      } else {
-        onWorkoutGenerated(workout.workout);
+        if (error) throw error;
+      }
+
+      toast.success("Workout generated successfully!");
+      onWorkoutGenerated?.(workout.workouts);
+
+      // Update remaining generations count for free users
+      if (!isPro) {
+        setRemainingGenerations((prev) => (prev !== null ? prev - 1 : null));
       }
     } catch (error) {
       console.error("Error generating workout:", error);
-      if (error instanceof Error) {
-        toast.error(error.message);
-      } else {
-        toast.error(
-          "An unexpected error occurred while generating the workout"
-        );
-      }
+      toast.error("Failed to generate workout");
     } finally {
       setIsGenerating(false);
     }
   }
 
-  async function handleSaveRoutine() {
-    if (!previewWorkout || !user?.id) return;
-
-    try {
-      const { error: saveError } = await supabase
-        .from("workout_routines")
-        .insert({
-          user_id: user.id,
-          name: `AI Workout - ${new Date().toLocaleDateString()}`,
-          description: `Generated based on ${preferences?.fitness_goal} goal, ${preferences?.experience_level} level`,
-          workouts: previewWorkout.workout,
-          analysis: previewWorkout.analysis,
-        })
-        .select()
-        .single();
-
-      if (saveError) {
-        console.error("Error saving routine:", saveError);
-        throw new Error(`Failed to save workout routine: ${saveError.message}`);
-      }
-
-      toast.success("Workout routine saved successfully!");
-      setPreviewWorkout(null);
-      onWorkoutGenerated({});
-    } catch (error) {
-      console.error("Error saving routine:", error);
-      if (error instanceof Error) {
-        toast.error(error.message);
-      } else {
-        toast.error("An unexpected error occurred while saving the routine");
-      }
-    }
-  }
-
   return (
-    <>
-      <Button onClick={handleGenerate} disabled={isGenerating}>
+    <motion.div
+      whileHover={{ scale: 1.02 }}
+      whileTap={{ scale: 0.98 }}
+      className="flex flex-col items-center gap-2"
+    >
+      <Button
+        onClick={generateWorkout}
+        disabled={
+          isGenerating ||
+          (remainingGenerations !== null && remainingGenerations <= 0)
+        }
+        className="bg-primary hover:bg-primary/90 min-w-[200px]"
+      >
         {isGenerating ? (
           <>
-            <div className="mr-2 h-4 w-4 animate-spin rounded-full border-b-2 border-current" />
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             Generating...
           </>
         ) : (
           "Generate AI Workout"
         )}
       </Button>
-
-      <Dialog
-        open={!!previewWorkout}
-        onOpenChange={() => setPreviewWorkout(null)}
-      >
-        <DialogContent className="max-w-[95vw] sm:max-w-4xl mx-auto">
-          <DialogHeader>
-            <DialogTitle>Preview Generated Workout</DialogTitle>
-          </DialogHeader>
-
-          <div className="mt-4 space-y-4">
-            {previewWorkout &&
-              Object.entries(previewWorkout.workout).map(([day, exercises]) => (
-                <div key={day} className="border rounded-lg p-4">
-                  <h3 className="font-semibold capitalize mb-2">{day}</h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {exercises.map((exercise, index) => (
-                      <div key={index} className="p-2 bg-muted rounded">
-                        <p className="font-medium">{exercise.name}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {exercise.sets} sets × {exercise.reps} reps
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-
-            {previewWorkout?.analysis && (
-              <div className="border rounded-lg p-4">
-                <h3 className="font-semibold mb-2">Analysis</h3>
-                <div className="text-sm text-muted-foreground">
-                  {/* Add analysis details here */}
-                </div>
-              </div>
-            )}
-          </div>
-
-          <DialogFooter className="flex gap-2 mt-4">
-            <Button variant="outline" onClick={() => setPreviewWorkout(null)}>
-              Cancel
-            </Button>
-            <Button onClick={handleSaveRoutine}>Save Routine</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
+      {!isPro && remainingGenerations !== null && (
+        <p className="text-xs text-muted-foreground">
+          {remainingGenerations} generation
+          {remainingGenerations !== 1 ? "s" : ""} remaining this month
+        </p>
+      )}
+    </motion.div>
   );
 }

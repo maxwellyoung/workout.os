@@ -8,6 +8,16 @@ import Link from "next/link";
 import { useAuth } from "./auth/auth-provider";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Button } from "./ui/button";
+import { GearIcon } from "@radix-ui/react-icons";
 
 export default function Header() {
   const { user } = useAuth();
@@ -57,6 +67,26 @@ export default function Header() {
                   Routines
                 </Link>
               </nav>
+            )}
+            {user && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm" className="gap-2">
+                    <GearIcon className="h-4 w-4" />
+                    Settings
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuLabel>Account Settings</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <Link href="/settings/profile">
+                    <DropdownMenuItem>Profile</DropdownMenuItem>
+                  </Link>
+                  <Link href="/settings/billing">
+                    <DropdownMenuItem>Billing</DropdownMenuItem>
+                  </Link>
+                </DropdownMenuContent>
+              </DropdownMenu>
             )}
             <Greeting />
             <div className="text-sm text-muted-foreground dot-matrix">
