@@ -2,9 +2,24 @@
 
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { toast } from "sonner";
+import { useSubscription } from "@/hooks/use-subscription";
+import { Loader2 } from "lucide-react";
 
 export default function BillingPage() {
+  const { isPro, isLoading, features } = useSubscription();
+
+  const handleUpgrade = () => {
+    window.location.href = "https://buy.stripe.com/bIY9C53WpeQ09Ec6op";
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center p-6">
+        <Loader2 className="h-6 w-6 animate-spin" />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -17,34 +32,38 @@ export default function BillingPage() {
       <div className="space-y-8">
         <div className="flex items-center justify-between rounded-lg border p-4">
           <div className="space-y-0.5">
-            <div className="text-sm font-medium">Free Plan</div>
+            <div className="text-sm font-medium">
+              {isPro ? "Pro Plan" : "Free Plan"}
+            </div>
             <div className="text-sm text-muted-foreground">
-              You are currently on the free plan
+              {isPro
+                ? "You are currently on the pro plan"
+                : "You are currently on the free plan"}
             </div>
           </div>
-          <Button
-            onClick={() => toast.info("Pro plan coming soon!")}
-            variant="outline"
-          >
-            Upgrade to Pro
-          </Button>
+          {!isPro && (
+            <Button onClick={handleUpgrade} variant="outline">
+              Upgrade to Pro
+            </Button>
+          )}
         </div>
         <div className="rounded-lg border p-4">
-          <div className="text-sm font-medium mb-2">Free Plan Features</div>
+          <div className="text-sm font-medium mb-2">Your Features</div>
           <ul className="text-sm text-muted-foreground space-y-2">
-            <li>• Basic workout tracking</li>
-            <li>• AI workout generation (3/month)</li>
-            <li>• Progress tracking</li>
-          </ul>
-        </div>
-        <div className="rounded-lg border p-4">
-          <div className="text-sm font-medium mb-2">Pro Plan Features</div>
-          <ul className="text-sm text-muted-foreground space-y-2">
-            <li>• Advanced workout tracking</li>
-            <li>• Unlimited AI workout generation</li>
-            <li>• Detailed analytics and insights</li>
-            <li>• Priority support</li>
-            <li>• Custom workout templates</li>
+            <li>
+              • AI workout generation (
+              {features.aiWorkoutGenerations === "unlimited"
+                ? "Unlimited"
+                : `${features.aiWorkoutGenerations}/month`}
+              )
+            </li>
+            <li>
+              • {features.advancedTracking ? "Advanced" : "Basic"} workout
+              tracking
+            </li>
+            {features.customTemplates && <li>• Custom workout templates</li>}
+            {features.analytics && <li>• Detailed analytics and insights</li>}
+            {features.prioritySupport && <li>• Priority support</li>}
           </ul>
         </div>
       </div>

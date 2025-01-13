@@ -1,51 +1,62 @@
-export async function checkWorkoutGenerationLimit(
-  userId: string
-): Promise<boolean> {
-  try {
-    const response = await fetch("/api/subscription/check-limit", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ userId }),
-    });
+import { supabase } from "./supabase";
 
-    if (!response.ok) {
-      throw new Error("Failed to check generation limit");
+export async function checkSubscription(userId: string) {
+  if (!userId) return false;
+
+  try {
+    // First check if the subscriptions table exists
+    const { error: tableError } = await supabase
+      .from("subscriptions")
+      .select("count")
+      .limit(1);
+
+    if (tableError?.code === "PGRST116") {
+      console.log("Subscriptions table does not exist yet, creating...");
+      // Table doesn't exist, create it
+      const { error: createError } = await supabase.rpc(
+        "create_subscriptions_table"
+      );
+      if (createError) {
+        console.error("Error creating subscriptions table:", createError);
+        return false;
+      }
     }
 
-    const data = await response.json();
-    return data.canGenerate;
+    // Now check the subscription
+    const { data: subscription, error } = await supabase
+      .from("subscriptions")
+      .select("status, price_id")
+      .eq("user_id", userId)
+      .single();
+
+    if (error) {
+      if (error.code === "PGRST116") {
+        console.log("Subscriptions table not found");
+        return false;
+      }
+      if (error.code === "PGRST104") {
+        console.log("No subscription found for user");
+        return false;
+      }
+      console.error("Error fetching subscription:", error);
+      return false;
+    }
+
+    return (
+      subscription?.status === "active" || subscription?.status === "trialing"
+    );
   } catch (error) {
-    console.error("Error checking workout generation limit:", error);
+    console.error("Error checking subscription:", error);
     return false;
   }
 }
 
-export async function getSubscriptionStatus(userId: string) {
-  try {
-    const response = await fetch("/api/subscription/status", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ userId }),
-    });
-
-    if (!response.ok) {
-      throw new Error("Failed to get subscription status");
-    }
-
-    const data = await response.json();
-    return {
-      isPro: data.isPro,
-      status: data.status,
-    };
-  } catch (error) {
-    console.error("Error getting subscription status:", error);
-    return {
-      isPro: false,
-      status: "free",
-    };
-  }
+export function getFeatures(isPro: boolean) {
+  return {
+    aiWorkoutGenerations: isPro ? "unlimited" : 3,
+    customTemplates: isPro,
+    analytics: isPro,
+    prioritySupport: isPro,
+    advancedTracking: isPro,
+  };
 }
