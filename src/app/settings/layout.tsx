@@ -11,7 +11,7 @@ export default function SettingsLayout({
   return (
     <ProtectedRoute>
       <div className="min-h-screen bg-background relative">
-        <div className="fixed inset-0 grid-pattern opacity-[0.03]" />
+        <div className="fixed inset-0 grid-pattern opacity-[0.02]" />
         <div className="fixed inset-0 bg-gradient-to-t from-background to-transparent" />
         <div className="container mx-auto p-4 space-y-6 relative">
           <div className="flex items-center gap-4">

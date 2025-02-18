@@ -17,7 +17,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning className="dark">
       <body className={`${GeistMono.className} antialiased`}>
-        <div className="fixed inset-0 bg-gradient-to-br from-black via-gray-900 to-black pixel-pattern" />
+        <div className="fixed inset-0 bg-gradient-to-br from-black via-gray-900 to-black pixel-pattern opacity-30" />
         <div className="relative">
           <ThemeProvider
             attribute="class"

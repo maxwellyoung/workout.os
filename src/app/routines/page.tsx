@@ -11,6 +11,7 @@ import WorkoutTracker from "@/components/workout-tracker";
 import Header from "@/components/header";
 import { ProtectedRoute } from "@/components/protected-route";
 import { AIWorkoutGenerator } from "@/components/ai-workout-generator";
+import { IntentionDisplay } from "@/components/intention-display";
 import {
   Dialog,
   DialogContent,
@@ -19,7 +20,6 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
-import { processStatsUpdate } from "@/lib/stats-processor";
 
 interface WorkoutRoutine {
   id: string;
@@ -54,8 +54,6 @@ export default function RoutinesPage() {
   const [previewRoutine, setPreviewRoutine] = useState<WorkoutRoutine | null>(
     null
   );
-  const [isUpdatingStats, setIsUpdatingStats] = useState(false);
-  const [statsInput, setStatsInput] = useState("");
 
   const fetchRoutines = useCallback(async () => {
     try {
@@ -162,55 +160,17 @@ export default function RoutinesPage() {
     setSelectedRoutine(routine.id);
   };
 
-  const updateStats = async () => {
-    setIsUpdatingStats(true);
-    try {
-      if (!user?.id) throw new Error("No user ID found");
-
-      const processed = await processStatsUpdate(user.id, statsInput);
-
-      if (processed.type === "intention") {
-        toast.success("Workout intention saved");
-      } else {
-        toast.success("Workout stats recorded");
-      }
-
-      setStatsInput("");
-    } catch (error) {
-      console.error("Error updating stats:", error);
-      toast.error("Failed to update stats");
-    } finally {
-      setIsUpdatingStats(false);
-    }
-  };
-
   return (
     <ProtectedRoute>
       <div className="min-h-screen relative">
-        <div className="fixed inset-0 grid-pattern opacity-[0.03]" />
+        <div className="fixed inset-0 grid-pattern opacity-[0.02]" />
         <div className="fixed inset-0 bg-gradient-to-t from-background to-transparent" />
         <div className="relative">
           <Header />
           <main className="container mx-auto p-4 space-y-6">
             {!selectedRoutine && (
               <div className="flex flex-col space-y-4 mb-8">
-                <div className="flex items-center gap-4">
-                  <div className="flex-1">
-                    <textarea
-                      placeholder="Quick update (e.g., 'Feeling strong today, aiming for new PR on bench' or 'Completed 3 sets of squats at 225lbs')"
-                      value={statsInput}
-                      onChange={(e) => setStatsInput(e.target.value)}
-                      className="w-full h-20 px-3 py-2 text-sm rounded-md border bg-background resize-none focus:outline-none focus:ring-2 focus:ring-primary"
-                    />
-                  </div>
-                  <Button
-                    onClick={updateStats}
-                    disabled={!statsInput.trim() || isUpdatingStats}
-                    className="shrink-0"
-                  >
-                    {isUpdatingStats ? "Updating..." : "Update"}
-                  </Button>
-                </div>
+                <IntentionDisplay className="glassmorphic rounded-lg p-4" />
               </div>
             )}
 
